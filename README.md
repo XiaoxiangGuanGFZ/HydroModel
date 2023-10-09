@@ -12,5 +12,8 @@ HyDro-Model系统软件考虑了不同产流机制（蓄满产流、超渗产流
 水源划分以及洪水演算方法，概化流域水文过程，模型理论以及算法实现主要参考包为民主编《水文预报（第四版）》。
 使用过程中，如有问题请与软件开发者邮件联系，作者保留所有权利。
 
+## XAJ_modelling.Rmd
+an R Markdown document as a brief tutorial how to implement the XAJ for hydrological modelling. 
+
 ## Author
 Xiaoxiang Guan(管晓祥)
