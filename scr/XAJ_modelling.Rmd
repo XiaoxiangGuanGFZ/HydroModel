@@ -1,0 +1,123 @@
+---
+title: "XAJ_modelling"
+author: "Xiaoxiang Guan"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This is a brief tutorial on how to implement the source code for hydrological modelling,
+by using Xinanjiang (XAJ) model. 
+
+First, load the `XAJ.R` source code into the console (R session), together with the `rtop` 
+library in order to use the SCE-UA algorithm for model calibration. 
+```{r load, echo=TRUE, warning=FALSE, message=FALSE}
+
+library(rtop)
+ws <- "D:/HydroModel/"
+source(paste0(ws, "scr/XAJ.R"))
+
+```
+
+## Import the example data
+
+import the example data `data/DATA_Area4766_1982-2002.csv`. This example data set covers 
+the basic variables needed for modelling: precipitation (mm), potential evapotranspiration (mm) and 
+discharge (m3/s) all at the daily step. The dataset covers the observation period of 1982-2002.
+The example catchment has an area of 4766 km2.
+
+```{r example_data, echo=TRUE}
+dat = read.table(paste0(ws, "data/DATA_Area4766_1982-2002.csv"),header = T,sep = ",")
+
+P = dat[,4]
+E = dat[,5]
+Q = dat[,6]
+DAREA = 4766 ##
+DT = 24
+head(dat, 8)
+
+```
+
+## XAJ model calibration based on SCE-UA algorithm
+
+create the global variables in order to make the data available for the 
+calibration (fitting) function during mutiple iteration processes. 
+
+```{r Global_variables, echo=TRUE}
+#-----定义全局变量 (define global variables)-----
+Validinput_P <<- P
+Validinput_E <<- E
+Validinput_Q <<- Q
+Validinput_DAREA <<- DAREA  ## catchment area in km2
+Validinput_DT <<- 24  ## simulation time step
+
+```
+
+there are 15 parameters in XAJ we defined to be calibrated. 
+For the description on the parameters, refer to the documents.
+
+```{r XAJ_para_boundary, echo=TRUE}
+#-------------1    2    3     4    5     6     7    8     9    10   11   12   13   14  15
+#-------------Kc, SM,   B,    C   Ex   WUM   WLM  WDM    Kg    Ki   Cs   Ci   Cg   CR  L
+paralower = c(0.1,5  ,  0.1, 0.05, 1.0,  40,  20,  5, 0.25, 0.25, 0.1, 0.8, 0.8, 0.1, 0)
+paraupper = c(1  ,50 ,  1.5,  0.2, 1.4, 300, 150, 60, 0.49, 0.49,   6,   1,   1, 0.6, 3)
+parainitial=c(0.6,20 ,  0.4,  0.1, 1.2, 180,  40, 10,  0.3,  0.4, 0.4, 0.9, 0.9, 0.3, 0)
+fit = function(x) {
+  Kc = x[1]; SM = x[2];WUM = x[6];WLM = x[7];WDM = x[9];
+  B = x[3];C = x[4];Ex = x[5];Kg = x[9];Ki = x[10];
+  Cs = x[11];Ci = x[12];Cg = x[13];CR = x[14];L = x[15]
+  out = XAJ(Validinput_P, Validinput_E, Validinput_Q, Validinput_DAREA, Validinput_DT,
+            Kc, SM, B, C,Ex,WUM, WLM, WDM, 
+            Kg, Ki, 
+            Cg, Cs, Ci, CR,L) 
+  Qsi = out
+  Qre = Validinput_Q
+  R2 = 1-sum((Qre-Qsi)^2,na.rm = T)/sum((Qre-mean(Qre))^2,na.rm = T) #NSE
+  return(1-R2)
+}
+
+```
+
+calibrate the XAJ model by using the `sceua()` from R package `rtop`. The calibrated parameters
+(results) could be used to rerun the model to check the performance of model.
+
+```{r model_calibration, echo=TRUE, error=FALSE,warning=FALSE,message=FALSE}
+sceua_xaj = sceua(fit, pars = parainitial, lower = paralower, 
+                  upper = paraupper, maxn = 1000, pcento = 0.00001, iprint = 0)
+x = sceua_xaj$par
+print(x)
+```
+
+
+```{r, comparison}
+
+Kc = x[1]; SM = x[2];WUM = x[6];WLM = x[7];WDM = x[9];
+B = x[3];C = x[4];Ex = x[5];Kg = x[9];Ki = x[10];
+Cs = x[11];Ci = x[12];Cg = x[13];CR = x[14];L = x[15]
+out = XAJ(Validinput_P, Validinput_E, Validinput_Q, Validinput_DAREA, Validinput_DT,
+          Kc, SM, B, C,Ex,WUM, WLM, WDM, 
+          Kg, Ki, 
+          Cg, Cs, Ci, CR,L) 
+Qsi = out
+Qre = Validinput_Q
+R2 = 1-sum((Qre-Qsi)^2,na.rm = T)/sum((Qre-mean(Qre))^2,na.rm = T) #NSE
+print(paste0("NSE: ", round(R2, 4)))
+
+#--- obs VS. sim
+plot(1:length(Validinput_Q),Validinput_Q, 
+     xlab = "time", ylab = "discharge [m3/s]", main = "simulation vs. observation")
+points(1:length(Qsi),Qsi, type = "l",col = "red") 
+
+```
+here we plot the observed and simulated discharge processes in the same plot 
+(observation: black points, and simulation: red line), with an 
+attempt to have a straightforward understanding how well the XAJ simulates the discharge 
+processes. The result displays that the XAJ model performs well in discharge simulation 
+for the example catchment, under the support the SCE-UA algorithm.
+The main conclusion could be the XAJ model together with the parameter calibration algorithm 
+shows a good performance and have a positive application potential. 
+
